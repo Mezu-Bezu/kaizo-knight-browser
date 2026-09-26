@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>KAIZO KNIGHT</title><meta name="description" content="The Kaizo Roaring Knight. Normal and Weird Route. Straight to the fight."><link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><button id="menu" hidden>← ROUTES</button><span id="route-name"></span><div><button id="retry" hidden>RETRY <kbd>R</kbd></button><button id="fullscreen" aria-label="Full screen">⛶</button></div></header>
+<main id="stage">
+ <section id="title-screen" aria-label="Choose a Knight fight">
+  <div class="mark" aria-hidden="true">✦</div><p class="eyebrow">THE ROARING KNIGHT</p><h1>KAIZO<span>KNIGHT</span></h1>
+  <div class="routes"><button data-route="normal"><span class="heart">♥</span>NORMAL ROUTE</button><button data-route="weird"><span class="heart">♥</span>WEIRD ROUTE</button></div>
+  <p class="hint">Choose a route. Face the Knight.</p>
+ </section>
+ <section id="loading" hidden aria-live="polite"><p id="load-label">Preparing the Knight…</p><progress id="progress" max="100" value="0"></progress><p class="hint">The first load downloads the game. Retries reuse it.</p></section>
+ <div id="game-host" hidden></div>
+ <section id="result" hidden aria-live="polite"><h2 id="result-title"></h2><button id="again">FIGHT AGAIN</button><button id="choose">CHOOSE ROUTE</button></section>
+ <section id="error" hidden role="alert"><h2>Couldn’t start the fight.</h2><p id="error-text"></p><button id="try-again">TRY AGAIN</button><button id="error-menu">BACK TO ROUTES</button></section>
+</main>
+<footer><p>ARROWS <span>Move</span>　Z / ENTER <span>Confirm</span>　X / SHIFT <span>Cancel / Slow</span>　C <span>Menu</span></p><p class="credits">DELTARUNE © Toby Fox · Kaizo Knight by EnderCat8 · <a href="about.html">Credits & saves</a></p></footer>
+<script type="module" src="app.js"></script></body></html>
