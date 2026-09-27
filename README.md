@@ -4,6 +4,12 @@ Normal and Weird Route Kaizo Roaring Knight v2.3.3 battles, running entirely in 
 
 The arena patch preserves the mod's attack scripts. It changes chapter entry, save selection, arena setup, and the post-battle flow. No native game process runs while playing.
 
+## Play online
+
+[Play Kaizo Knight in your browser](https://mezu-bezu.github.io/kaizo-knight-browser/).
+
+GitHub Pages publishes the prepared `dist` folder through `.github/workflows/pages.yml` whenever `main` changes. The first load downloads the game files; retries reuse the downloaded game during the same visit.
+
 ## Play locally
 
 The prepared local edition includes the game inputs. With Node.js installed:
@@ -16,7 +22,7 @@ Open http://127.0.0.1:4173/ in a desktop browser. Arrow keys move/select; Z/Ente
 
 ## Build from source
 
-The GitHub source edition excludes DELTARUNE game data, audio, saves, and the proprietary GameMaker runtime. Supply your installed Kaizo Knight v2.3.3 game, your normal save, a Weird Route save, and UndertaleModTool CLI v0.9.2.0.
+The repository includes the prepared browser edition. To rebuild its game data, supply your installed Kaizo Knight v2.3.3 game, your normal save, a Weird Route save, and UndertaleModTool CLI v0.9.2.0.
 
 ```sh
 node scripts/build.mjs --game "C:/Games/DELTARUNE" --normal "C:/path/filech3_1" --weird "C:/path/weird-filech3_1" --utmt "C:/Tools/UndertaleModCli.exe" --runtime "C:/path/browser-runtime"

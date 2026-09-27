@@ -2,12 +2,4 @@ node_modules/
 .DS_Store
 *.log
 .build/
-dist/runtime/runner.*
-dist/runtime/audio-worklet.js
-dist/runtime/game.*
-dist/runtime/game-manifest.json
-dist/runtime/*.ogg
-dist/runtime/mus/
-dist/mus/
-dist/saves/
 .openai/
