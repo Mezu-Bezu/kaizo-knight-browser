@@ -55,7 +55,11 @@ test('runner stays rendered beneath loading, then supports both routes and retry
   assert.equal(await page.locator('#game-frame').count(),0);
   frame=await startAndReady('weird','[data-route="weird"]');
   frame=await startAndReady('weird','#retry');
-  await frame.evaluate(()=>window.dispatchEvent(new ErrorEvent('error',{message:'Fixture runtime failure'})));
+  // Dispatch from the parent: the error handler removes the iframe immediately.
+  await page.evaluate(()=>{
+   const runner=document.getElementById('game-frame').contentWindow;
+   runner.dispatchEvent(new runner.ErrorEvent('error',{message:'Fixture runtime failure'}));
+  });
   await page.locator('#error').waitFor({state:'visible'});
   assert.equal(await page.locator('#game-frame').count(),0);
   assert.equal(await page.locator('#error-text').textContent(),'Fixture runtime failure');
