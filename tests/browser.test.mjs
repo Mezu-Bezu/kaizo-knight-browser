@@ -17,7 +17,7 @@ test('runner stays rendered beneath loading, then supports both routes and retry
    delay(10000).then(()=>{throw Error('Server startup timed out');})
   ]);
   const engine=process.env.BROWSER||'firefox';
-  browser=await (engine==='firefox'?firefox:chromium).launch({headless:true,...(engine==='msedge'?{channel:'msedge'}:{})});
+  browser=await (engine==='firefox'?firefox:chromium).launch({headless:process.env.HEADLESS!=='false',...(engine==='firefox'?{firefoxUserPrefs:{'webgl.force-enabled':true}}:{}),...(engine==='msedge'?{channel:'msedge'}:{})});
   const page=await browser.newPage();
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   let downloads=0;
@@ -67,6 +67,26 @@ test('runner stays rendered beneath loading, then supports both routes and retry
   assert.equal(await page.locator('#title-screen').isVisible(),true);
   assert.equal(downloads,1,'retries and route changes reuse the game download');
   assert.deepEqual(errors,[]);
+  if(process.env.GAME_SMOKE==='1'){
+   await page.unrouteAll();
+   const messages=[];
+   page.on('console',message=>messages.push(message.text()));
+   await page.reload();
+   for(const route of ['normal','weird']){
+    await page.locator(`[data-route="${route}"]`).click();
+    try{
+     await page.waitForFunction(()=>!document.getElementById('retry').hidden||!document.getElementById('error').hidden,null,{timeout:100000});
+     assert.equal(await page.locator('#error').isVisible(),false,await page.locator('#error-text').textContent());
+     assert.equal(await page.locator('#game-host').isVisible(),true);
+     assert.ok(messages.some(line=>line.startsWith('KNIGHT_READY:')),'game must signal Knight activation');
+    }catch(error){
+     throw new Error(`${route} game startup failed: ${error.message}\n${messages.slice(-30).join('\n')}`);
+    }
+    messages.length=0;
+    await page.locator('#menu').click();
+   }
+   assert.deepEqual(errors,[]);
+  }
  }finally{
   await browser?.close();
   server.kill();

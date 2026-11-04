@@ -19,6 +19,8 @@ jobs:
       - run: npm install --ignore-scripts
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       - run: npm run check
-      - run: npm test
+      - run: xvfb-run -a npm test
         env:
           BROWSER: ${{ matrix.browser }}
+          HEADLESS: 'false'
+          GAME_SMOKE: '1'
