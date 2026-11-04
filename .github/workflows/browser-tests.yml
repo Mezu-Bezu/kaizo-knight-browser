@@ -1,0 +1,24 @@
+name: Browser startup regression
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  startup:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        browser: [firefox, chromium]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run check
+      - run: npm test
+        env:
+          BROWSER: ${{ matrix.browser }}

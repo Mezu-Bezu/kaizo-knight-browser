@@ -52,3 +52,15 @@ This is an unofficial fan project. Third-party game assets, mod assets, and engi
 ## Validation
 
 Verified browser startup for both route saves, route-specific Knight activation, original combat loading, audio download, and direct arena entry. Full Kaizo clears and every late-phase attack have not been playtested.
+
+The launcher keeps the game iframe rendered beneath an opaque loading screen during startup. Hiding it with `display:none` can pause Firefox's animation frames before the runner reaches `KNIGHT_READY`.
+
+To run the launcher regression test:
+
+```sh
+npm install
+npx playwright install firefox
+npm test
+```
+
+CI runs this test in Firefox and Chromium. It covers the loading overlay, animation-frame startup, both route selections, retries, download reuse, and runtime-error recovery using a small runner fixture. It does not playtest the bundled game or validate a newer mod version.
