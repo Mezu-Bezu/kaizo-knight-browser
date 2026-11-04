@@ -2,7 +2,11 @@ const $=id=>document.getElementById(id);
 let currentRoute='normal',gameURL=null,loadingPromise=null,session=0,timeout;
 const isRoute=v=>v==='normal'||v==='weird';
 function status(text,value){$('load-label').textContent=text;if(value!==undefined)$('progress').value=value;}
-function screen(id){for(const name of ['title-screen','loading','game-host','result','error'])$(name).hidden=name!==id;}
+function screen(id){
+ // Firefox pauses animation frames in display:none iframes. The runner must
+ // render behind the loading overlay so it can reach KNIGHT_READY.
+ for(const name of ['title-screen','loading','game-host','result','error'])$(name).hidden=name!==id&&!(id==='loading'&&name==='game-host');
+}
 async function loadGame(){
  if(gameURL)return gameURL;
  if(loadingPromise)return loadingPromise;
@@ -28,7 +32,7 @@ async function start(route=currentRoute){
   await loadGame();if(run!==session)return;
   status('Entering the arena…',100);
   const frame=document.createElement('iframe');frame.title='Kaizo Roaring Knight — '+route+' route';frame.allow='autoplay; fullscreen; gamepad';frame.src='runtime/?route='+route;frame.id='game-frame';$('game-host').append(frame);
-  timeout=setTimeout(()=>{if(run===session)fail('The game took too long to start. Try again, or use a current desktop Chrome or Edge browser.');},90000);
+  timeout=setTimeout(()=>{if(run===session)fail('The game took too long to start. Check your connection and try again.');},90000);
  }catch(error){if(run===session)fail(error.message);}
 }
 function menu(){session++;clearTimeout(timeout);$('game-host').replaceChildren();screen('title-screen');document.body.classList.remove('playing');$('route-name').textContent='';$('retry').hidden=true;$('menu').hidden=true;document.querySelector('[data-route="'+currentRoute+'"]').focus();}
