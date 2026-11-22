@@ -12,12 +12,8 @@ function readArgs(argv) {
     if (!token.startsWith('--')) continue;
     const key = token.slice(2);
     const next = argv[i + 1];
-    if (next && !next.startsWith('--')) {
-      result[key] = next;
-      i++;
-    } else {
-      result[key] = true;
-    }
+    if (next && !next.startsWith('--')) { result[key] = next; i++; }
+    else result[key] = true;
   }
   return result;
 }
@@ -34,9 +30,22 @@ function requireDir(dir, label) {
   }
 }
 
+function validateGameMakerData(file, label) {
+  requireFile(file, label);
+  const data = fs.readFileSync(file);
+  if (data.length < 16 || data.toString('ascii', 0, 4) !== 'FORM' ||
+      data.toString('ascii', 8, 12) !== 'GEN8') {
+    throw new Error(`${label} is not a recognizable GameMaker FORM/GEN8 data file.`);
+  }
+  const declaredSize = data.readUInt32BE(4);
+  if (declaredSize !== data.length - 8) {
+    throw new Error(`${label} has an inconsistent FORM size (header: ${declaredSize}, actual: ${data.length - 8}).`);
+  }
+  return data;
+}
+
 const args = readArgs(process.argv.slice(2));
 const patchedWinMode = Boolean(args['patched-win']);
-
 for (const key of ['game', 'normal', 'weird', 'runtime']) {
   if (!args[key]) throw new Error(`Missing --${key}`);
 }
@@ -60,22 +69,28 @@ requireFile(args.weird, 'Weird save');
 requireFile(path.join(chapter, 'audiogroup1.dat'), 'audiogroup1.dat');
 requireFile(path.join(chapter, 'options.ini'), 'options.ini');
 requireFile(path.join(chapter, 'lang/lang_ja.json'), 'lang/lang_ja.json');
+if (!patchedWinMode) requireFile(path.join(chapter, 'data.win'), 'Original data.win');
+
 for (const name of ['runner.js', 'runner.wasm', 'audio-worklet.js']) {
   requireFile(path.join(runtimeDir, name), `Runtime ${name}`);
 }
-
-fs.mkdirSync(build, {recursive: true});
-fs.mkdirSync(out, {recursive: true});
+const wasmHeader = fs.readFileSync(path.join(runtimeDir, 'runner.wasm')).subarray(0, 4);
+if (!wasmHeader.equals(Buffer.from([0x00, 0x61, 0x73, 0x6d]))) {
+  throw new Error('Runtime runner.wasm does not have the WebAssembly magic header.');
+}
+if (fs.statSync(path.join(runtimeDir, 'audio-worklet.js')).size === 0) {
+  throw new Error('Runtime audio-worklet.js is empty.');
+}
 
 const normal = fs.readFileSync(args.normal, 'utf8').trimEnd().split(/\r?\n/);
 const weird = fs.readFileSync(args.weird, 'utf8').trimEnd().split(/\r?\n/);
 if (normal.length !== 3055 || weird.length !== 3055) {
   throw new Error(`Expected Chapter 3 saves with 3055 lines (Normal: ${normal.length}, Weird: ${weird.length}).`);
 }
-
-const weirdFlag = Number(weird[552 + 456]);
+const weirdFlagIndex = 552 + 456;
+const weirdFlag = Number(weird[weirdFlagIndex]);
 if (weirdFlag !== 1) {
-  console.warn(`WARNING: Weird Route flag at legacy index 1008 is ${weirdFlag}. Weird Route startup is NOT verified.`);
+  throw new Error(`Weird Route save rejected: flag 456 at legacy line index ${weirdFlagIndex} must be 1 (found ${weird[weirdFlagIndex]}).`);
 }
 
 // Preserve the existing browser project's Weird Route save preparation.
@@ -90,41 +105,30 @@ fs.writeFileSync(path.join(root, 'dist/saves/weird-route-filech3_1'), weirdData)
 
 let gameDataPath;
 if (patchedWinMode) {
-  requireFile(args['patched-win'], 'Patched game data');
   gameDataPath = path.resolve(args['patched-win']);
+  validateGameMakerData(gameDataPath, 'Patched game data');
   console.log(`Using supplied patched game data: ${gameDataPath}`);
 } else {
   const utmt = path.resolve(args.utmt);
   requireFile(utmt, 'UndertaleModTool CLI');
   const generated = path.join(build, 'knight.win');
+  fs.mkdirSync(build, {recursive: true});
   const result = spawnSync(utmt, [
-    'load',
-    path.join(chapter, 'data.win'),
-    '-s',
-    path.join(root, 'scripts/patch-knight.csx'),
-    '-o',
-    generated,
-    '-f'
+    'load', path.join(chapter, 'data.win'), '-s',
+    path.join(root, 'scripts/patch-knight.csx'), '-o', generated, '-f'
   ], {stdio: 'inherit'});
-
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error('Game-data patch failed.');
-  requireFile(generated, 'Generated patched game data');
+  validateGameMakerData(generated, 'Generated patched game data');
   gameDataPath = generated;
 }
 
 let offset = 0;
 const files = [];
 const buffers = [];
-
 function pack(name, data) {
   buffers.push(data);
-  files.push({
-    filename: '/assets/' + name,
-    start: offset,
-    end: offset + data.length,
-    audio: 0
-  });
+  files.push({filename: '/assets/' + name, start: offset, end: offset + data.length, audio: 0});
   offset += data.length;
 }
 
@@ -141,7 +145,6 @@ for (const name of fs.readdirSync(musicDir)) {
   fs.writeFileSync(path.join(out, 'mus', name), data);
   if (/knight|kaizo|gameover/i.test(name)) pack('mus/' + name, data);
 }
-
 fs.writeFileSync(path.join(out, 'runner.data'), Buffer.concat(buffers));
 
 let runner = fs.readFileSync(path.join(runtimeDir, 'runner.js'), 'utf8');
@@ -150,8 +153,7 @@ if (!metadata.test(runner)) {
   throw new Error('Unsupported runner package metadata. The supplied runtime may not match this browser project.');
 }
 runner = runner.replace(metadata, JSON.stringify({
-  files,
-  remote_package_size: offset,
+  files, remote_package_size: offset,
   package_uuid: args['package-uuid'] || 'kaizo-knight-v300'
 }));
 fs.writeFileSync(path.join(out, 'runner.js'), runner);
@@ -165,11 +167,9 @@ for (const name of fs.readdirSync(chapter)) {
   }
 }
 
-// Remove old numbered chunks first so a shorter rebuild cannot leave stale parts behind.
 for (const name of fs.readdirSync(out)) {
   if (/^game\.part\d+$/.test(name)) fs.rmSync(path.join(out, name));
 }
-
 const gameData = fs.readFileSync(gameDataPath);
 const parts = [];
 const chunkSize = 20 * 1024 * 1024;
@@ -178,11 +178,8 @@ for (let pos = 0, index = 1; pos < gameData.length; pos += chunkSize, index++) {
   fs.writeFileSync(path.join(out, name), gameData.subarray(pos, pos + chunkSize));
   parts.push(name);
 }
-
-fs.writeFileSync(
-  path.join(out, 'game-manifest.json'),
-  JSON.stringify({parts, totalBytes: gameData.length})
-);
+fs.writeFileSync(path.join(out, 'game-manifest.json'),
+  JSON.stringify({parts, totalBytes: gameData.length}));
 
 console.log(`Browser data prepared from ${patchedWinMode ? 'supplied patched data' : 'legacy patch pipeline'}.`);
 console.log('This is a build step only. Runtime compatibility and both routes still require in-browser testing.');
