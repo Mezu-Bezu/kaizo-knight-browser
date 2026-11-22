@@ -4,6 +4,7 @@ using System.Linq;
 using UndertaleModLib.Decompiler;
 using UndertaleModLib.Compiler;
 
+// Fail closed: never export a partially patched game.
 EnsureDataLoaded();
 
 var context = new GlobalDecompileContext(Data);
@@ -12,10 +13,10 @@ var imports = new CodeImportGroup(Data);
 void RequireCode(string name)
 {
     if (!Data.Code.Any(c => c.Name.Content == name))
-        throw new Exception("Required game resource is missing: " + name);
+        throw new Exception("Required GameMaker code resource is missing: " + name);
 }
 
-string Read(string name)
+string ReadCode(string name)
 {
     RequireCode(name);
     var code = Data.Code.First(c => c.Name.Content == name);
@@ -24,39 +25,27 @@ string Read(string name)
     ).DecompileToString();
 }
 
-void Replace(string name, string code)
+void QueueReplace(string name, string code)
 {
     RequireCode(name);
-    if (code == null)
-        throw new Exception("Replacement code is null: " + name);
     imports.QueueReplace(name, code);
 }
 
-int CountOccurrences(string source, string value)
+string ReplaceExactlyOnce(string source, string oldText, string newText, string label)
 {
-    int count = 0;
-    int index = 0;
-    while ((index = source.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
-    {
-        count++;
-        index += value.Length;
-    }
-    return count;
+    int first = source.IndexOf(oldText, StringComparison.Ordinal);
+    if (first < 0)
+        throw new Exception("Patch anchor not found in " + label + ": " + oldText);
+
+    int second = source.IndexOf(oldText, first + oldText.Length, StringComparison.Ordinal);
+    if (second >= 0)
+        throw new Exception("Patch anchor occurs more than once in " + label + ": " + oldText);
+
+    return source.Substring(0, first) + newText +
+           source.Substring(first + oldText.Length);
 }
 
-string ReplaceExactlyOnce(string source, string oldText, string newText, string resourceName)
-{
-    int count = CountOccurrences(source, oldText);
-    if (count != 1)
-        throw new Exception(
-            "Compatibility check failed in " + resourceName +
-            ": expected one match, found " + count +
-            ". The 3.0 source code differs from the expected pattern."
-        );
-    return source.Replace(oldText, newText);
-}
-
-// Check all required resources before queuing any changes.
+// Check every resource before queuing any changes.
 string[] requiredResources = new string[]
 {
     "gml_Object_obj_intro_ch3_Create_0",
@@ -69,11 +58,11 @@ string[] requiredResources = new string[]
     "gml_Object_obj_knight_enemy_Create_0"
 };
 
-foreach (string resource in requiredResources)
-    RequireCode(resource);
+foreach (string name in requiredResources)
+    RequireCode(name);
 
-// Start the chapter through its usual initialization, then load only the arena.
-Replace("gml_Object_obj_intro_ch3_Create_0", @"
+// Start the chapter through its usual initialization, then load the arena.
+QueueReplace("gml_Object_obj_intro_ch3_Create_0", @"
 global.filechoice = 0;
 global.browser_knight = true;
 global.browser_weird = 0;
@@ -83,17 +72,19 @@ if (file_exists(""browser-route.txt"")) {
  file_text_close(routefile);
 }
 scr_load();");
-Replace("gml_Object_obj_intro_ch3_Step_0", "");
-Replace("gml_Object_obj_intro_ch3_Draw_0", "");
 
-string load = Read("gml_GlobalScript_scr_load");
+QueueReplace("gml_Object_obj_intro_ch3_Step_0", "");
+QueueReplace("gml_Object_obj_intro_ch3_Draw_0", "");
+
+string load = ReadCode("gml_GlobalScript_scr_load");
 load = ReplaceExactlyOnce(
     load,
     "myfileid = ossafe_file_text_open_read(file);",
-    @"file = global.browser_weird ? ""knight-weird.sav"" : ""knight-normal.sav"";
-myfileid = ossafe_file_text_open_read(file);",
+    @"file = global.browser_weird ? ""knight-weird.sav"" : ""knight-normal.sav"";" + "\n" +
+    "myfileid = ossafe_file_text_open_read(file);",
     "gml_GlobalScript_scr_load"
 );
+
 load = ReplaceExactlyOnce(
     load,
     "var room_id = global.currentroom;",
@@ -108,9 +99,9 @@ for (var bh = 1; bh <= 4; bh++) global.hp[bh] = global.maxhp[bh];
 var room_id = global.currentroom;",
     "gml_GlobalScript_scr_load"
 );
-Replace("gml_GlobalScript_scr_load", load);
+QueueReplace("gml_GlobalScript_scr_load", load);
 
-string create = Read("gml_Object_obj_ch3_PTB02_Create_0");
+string create = ReadCode("gml_Object_obj_ch3_PTB02_Create_0");
 create += @"
 con = 4;
 customcon = 1;
@@ -124,9 +115,9 @@ roaring_knight.visible=false;
 knight_marker = scr_dark_marker(roaring_knight.x, roaring_knight.y, spr_roaringknight_idle);
 camera_set_view_pos(view_get_camera(0),2230,0);
 ";
-Replace("gml_Object_obj_ch3_PTB02_Create_0", create);
+QueueReplace("gml_Object_obj_ch3_PTB02_Create_0", create);
 
-string step = Read("gml_Object_obj_ch3_PTB02_Step_0");
+string step = ReadCode("gml_Object_obj_ch3_PTB02_Step_0");
 step = @"
 if (con >= 8) {
  if (!variable_global_exists(""browser_result_logged"")) {
@@ -136,23 +127,22 @@ if (con >= 8) {
  exit;
 }
 " + step;
-Replace("gml_Object_obj_ch3_PTB02_Step_0", step);
+QueueReplace("gml_Object_obj_ch3_PTB02_Step_0", step);
 
-// The browser package places all external music beside the game.
-string settings = Read("gml_GlobalScript_kaizo_settings_init");
+// The browser package places external music beside the game.
+string settings = ReadCode("gml_GlobalScript_kaizo_settings_init");
 settings = ReplaceExactlyOnce(
     settings,
     "working_directory + ""../mus/""",
     "\"mus/\"",
     "gml_GlobalScript_kaizo_settings_init"
 );
-Replace("gml_GlobalScript_kaizo_settings_init", settings);
+QueueReplace("gml_GlobalScript_kaizo_settings_init", settings);
 
-Replace(
-    "gml_Object_obj_knight_enemy_Create_0",
-    Read("gml_Object_obj_knight_enemy_Create_0") +
-    "\nshow_debug_message(\"KNIGHT_READY:\"+string(k_sideb));"
-);
+string enemyCreate = ReadCode("gml_Object_obj_knight_enemy_Create_0");
+enemyCreate += "\nshow_debug_message(\"KNIGHT_READY:\"+string(k_sideb));";
+QueueReplace("gml_Object_obj_knight_enemy_Create_0", enemyCreate);
 
+// Import only after all required resources and replacement anchors passed validation.
 imports.Import();
-ScriptMessage("Knight-only browser patch applied. Required resources and source patterns passed compatibility checks; original attack logic preserved.");
+ScriptMessage("Knight browser patch applied. Required resources and patch anchors were validated.");
