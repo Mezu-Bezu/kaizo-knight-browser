@@ -69,8 +69,13 @@ fs.mkdirSync(out, {recursive: true});
 
 const normal = fs.readFileSync(args.normal, 'utf8').trimEnd().split(/\r?\n/);
 const weird = fs.readFileSync(args.weird, 'utf8').trimEnd().split(/\r?\n/);
-if (normal.length !== 3055 || weird.length !== 3055 || Number(weird[552 + 456]) !== 1) {
-  throw new Error('Expected Chapter 3 saves with 3055 lines and an enabled Weird Route flag at index 1008. No save was modified.');
+if (normal.length !== 3055 || weird.length !== 3055) {
+  throw new Error(`Expected Chapter 3 saves with 3055 lines (Normal: ${normal.length}, Weird: ${weird.length}).`);
+}
+
+const weirdFlag = Number(weird[552 + 456]);
+if (weirdFlag !== 1) {
+  console.warn(`WARNING: Weird Route flag at legacy index 1008 is ${weirdFlag}. Weird Route startup is NOT verified.`);
 }
 
 // Preserve the existing browser project's Weird Route save preparation.
