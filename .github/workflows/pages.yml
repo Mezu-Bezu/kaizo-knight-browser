@@ -1,7 +1,7 @@
 name: Deploy playable Knight arena
 on:
   push:
-    branches: [main]
+    branches: [main, patch-1]
   workflow_dispatch:
 permissions:
   contents: read
